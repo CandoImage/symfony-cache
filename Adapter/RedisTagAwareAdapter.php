@@ -355,7 +355,7 @@ EOLUA;
             local tagPrefix = string.gsub(KEYS[1], prefix, "")
             return redis.call('SCAN', cursor, 'COUNT', 5000, 'MATCH', '*' .. tagPrefix .. '*', 'TYPE', 'set')
         EOLUA;
-        $cursor = null;
+        $cursor = 0;
         do {
             $results = $this->pipeline(function () use ($getTagsLua, $cursor, $prefix, $tagsPrefix) {
                 yield 'eval' => [$getTagsLua, [$tagsPrefix, $cursor, $prefix], 1];
@@ -404,7 +404,7 @@ EOLUA;
         // cache items.
         foreach ($tagKeys as $tagKey) {
             $tagKey = substr($tagKey, \strlen($prefix));
-            $cursor = null;
+            $cursor = 0;
             $hasExistingKeys = false;
             do {
                 // Fetch all referenced cache keys from the tag entry.
