@@ -60,6 +60,14 @@ class RedisTagAwareAdapter extends AbstractTagAwareAdapter implements PruneableI
      * @var string|null detected eviction policy used on Redis server
      */
     private $redisEvictionPolicy;
+    /**
+     * @var string|null detected redis version of Redis server
+     */
+    private $redisVersion;
+    /**
+     * @var bool|null Indicate whether this "namespace" has been pruned and what the result was.
+     */
+    private $pruneResult;
     private $namespace;
 
     /**
@@ -298,6 +306,36 @@ EOLUA;
         return $success;
     }
 
+    /**
+     * @TODO Move to RedisTrait? It already has a version check - this would be handy.
+     *
+     * @return string
+     */
+    private function getRedisVersion(): string
+    {
+        if (null !== $this->redisVersion) {
+            return $this->redisVersion;
+        }
+
+        $hosts = $this->getHosts();
+        $host = reset($hosts);
+        if ($host instanceof \Predis\Client && $host->getConnection() instanceof ReplicationInterface) {
+            // Predis supports info command only on the master in replication environments
+            $hosts = [$host->getClientFor('master')];
+        }
+
+        foreach ($hosts as $host) {
+            $info = $host->info('Server');
+
+            if ($info instanceof ErrorInterface) {
+                continue;
+            }
+            return $this->redisVersion = $info['redis_version'];
+        }
+        // Fallback to 2.0 like RedisTrait does.
+        return $this->redisVersion = '2.0';
+    }
+
     private function getRedisEvictionPolicy(): string
     {
         if (null !== $this->redisEvictionPolicy) {
@@ -464,23 +502,15 @@ EOLUA;
      * The method attempts to reduced optimize the testing of the keys by
      * batching the key tests and reduce the amount of redis calls.
      *
-     * @param array $referencedCacheKeys
+     * @param array $cacheKeys
+     * @param int $chunks Number of chunks to create when processing cacheKeys.
      *
      * @return array
      */
-    private function getOrphanedCacheKeys($cacheKeys, $chunks = 2)
+    private function getOrphanedCacheKeys(array $cacheKeys, int $chunks = 2)
     {
-        static $existsSupportsMultiKeys;
-        if (!isset($existsSupportsMultiKeys)) {
-            $hosts = $this->getHosts();
-            $host = reset($hosts);
-            $info = $host->info('Server');
-            $info = !$info instanceof ErrorInterface ? $info['Server'] ?? $info : ['redis_version' => '2.0'];
-            $existsSupportsMultiKeys = version_compare($info['redis_version'], '2.0.3', '>=');
-        }
         $orphanedCacheKeys = [];
-
-        if ($existsSupportsMultiKeys) {
+        if (version_compare($this->getRedisVersion(), '2.0.3', '>=')) {
             // If we can check multiple keys at once divide and conquer to have
             // faster execution.
             $cacheKeysChunks = array_chunk($cacheKeys, floor(count($cacheKeys) / $chunks), true);
@@ -560,12 +590,15 @@ EOLUA;
 
     public function prune(): bool
     {
-        // First run without compression enabled to reduce data that is
-        // processed by the compression handling.
-        $result = $this->pruneOrphanedTags();
-        if ($result && $this->pruneWithCompression) {
-            $result = $this->pruneOrphanedTags(true);
+        // Only prune once per prune run.
+        if (!isset($this->pruneResult)) {
+            // First run without compression enabled to reduce data that is
+            // processed by the compression handling.
+            $this->pruneResult = $this->pruneOrphanedTags();
+            if ($this->pruneResult && $this->pruneWithCompression) {
+                $this->pruneResult = $this->pruneOrphanedTags(true);
+            }
         }
-        return $result;
+        return $this->pruneResult;
     }
 }
