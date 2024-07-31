@@ -76,7 +76,7 @@ class RedisTagAwareAdapter extends AbstractTagAwareAdapter implements PruneableI
      * @param int                                                                                   $defaultLifetime The default lifetime
      * @param bool                                                                                  $pruneWithCompression Enable compressed prune. Way more resource intensive.
      */
-    public function __construct($redis, string $namespace = '', int $defaultLifetime = 0, MarshallerInterface $marshaller = null, bool $pruneWithCompression = true)
+    public function __construct($redis, string $namespace = '', int $defaultLifetime = 0, MarshallerInterface $marshaller = null, bool $pruneWithCompression = false)
     {
         if ($redis instanceof \Predis\ClientInterface && $redis->getConnection() instanceof ClusterInterface && !$redis->getConnection() instanceof PredisCluster) {
             throw new InvalidArgumentException(sprintf('Unsupported Predis cluster connection: only "%s" is, "%s" given.', PredisCluster::class, get_debug_type($redis->getConnection())));
