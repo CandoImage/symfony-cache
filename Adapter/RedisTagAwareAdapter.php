@@ -68,6 +68,10 @@ class RedisTagAwareAdapter extends AbstractTagAwareAdapter implements PruneableI
      * @var bool|null Indicate whether this "namespace" has been pruned and what the result was.
      */
     private $pruneResult;
+    /**
+     * @var bool Whether prune compresses the tag sets (way more resource intensive)
+     */
+    private $pruneWithCompression;
     private $namespace;
 
     /**
